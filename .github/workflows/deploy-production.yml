@@ -1,0 +1,65 @@
+name: Deploy to EC2
+on: [workflow_dispatch]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+        PATH: '/home/ubuntu/annotation-backend'
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v2
+        with:
+            ref: master
+            fetch-depth: 0
+
+      - name: Copy code to EC2
+        uses: appleboy/scp-action@master
+        with:
+            host: ${{ secrets.EC2_HOST }}
+            username: ${{ secrets.EC2_USERNAME }}
+            key: ${{ secrets.EC2_SSH_PRIVATE_KEY }}
+            source: .  # Copy all files and directories from the current directory
+            target: ${{ env.PATH }}  # Specify the destination path on the EC2 instance
+
+      - name: Set up Python on EC2
+        uses: appleboy/ssh-action@master
+        with:
+            host: ${{ secrets.EC2_HOST }}
+            username: ${{ secrets.EC2_USERNAME }}
+            key: ${{ secrets.EC2_SSH_PRIVATE_KEY }}
+            script: |
+                sudo apt update
+                sudo apt install -y python3
+                sudo apt install -y python3-pip
+
+      - name: Install dependencies on EC2
+        uses: appleboy/ssh-action@master
+        with:
+            host: ${{ secrets.EC2_HOST }}
+            username: ${{ secrets.EC2_USERNAME }}
+            key: ${{ secrets.EC2_SSH_PRIVATE_KEY }}
+            script: |
+                cd ${{ env.PATH }}
+                pip3 install -r requirements.txt
+
+      - name: Terminate existing process
+        uses: appleboy/ssh-action@master
+        with:
+            host: ${{ secrets.EC2_HOST }}
+            username: ${{ secrets.EC2_USERNAME }}
+            key: ${{ secrets.EC2_SSH_PRIVATE_KEY }}
+            script: |
+              kill $(cat ${{ env.PATH }}/app.pid) || true # Terminate the process if the file exists
+
+      - name: Deploy to EC2
+        uses: appleboy/ssh-action@master
+        with:
+            host: ${{ secrets.EC2_HOST }}
+            username: ${{ secrets.EC2_USERNAME }}
+            key: ${{ secrets.EC2_SSH_PRIVATE_KEY }}
+            script: |
+                cd ${{ env.PATH }}
+                nohup uvicorn main:app --host 0.0.0.0 --port 8000 > /dev/null 2>&1 &
+                echo $! > app.pid # Save the process ID (PID) to a file
