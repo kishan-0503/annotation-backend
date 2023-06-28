@@ -61,5 +61,5 @@ jobs:
             key: ${{ secrets.EC2_SSH_PRIVATE_KEY }}
             script: |
                 cd ${{ env.CODE_PATH }}
-                sudo nohup uvicorn main:app --port 80 2>&1 > nohup.out &
+                sudo nohup uvicorn main:app --port 80 > /dev/null 2>&1 &
                 sudo echo $! > app.pid # Save the process ID (PID) to a file
