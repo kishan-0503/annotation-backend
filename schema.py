@@ -15,3 +15,10 @@ class TrainingCoordinate(BaseModel):
     y: int
     w: int
     h: int
+
+class OCRRequest(BaseModel):
+    x: int
+    y: int
+    w: int
+    h: int
+    base64_image: str

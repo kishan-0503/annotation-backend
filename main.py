@@ -11,9 +11,10 @@ import pytesseract
 import cv2
 import requests
 import io
+import base64
 from zipfile import ZipFile
 
-from schema import Coordinate, TrainingCoordinate
+from schema import Coordinate, TrainingCoordinate, OCRRequest
 
 
 app: FastAPI = FastAPI(
@@ -187,3 +188,37 @@ async def read_image_from_file(
         status_code=status.HTTP_200_OK,
         content={"ocr_text": ' '.join(ocr_df['text'])},
     )
+
+@app.post("/ocr/from-base64-image/")
+async def read_image_from_base64(request: OCRRequest):
+    """
+    API to get ocr data from base64 image
+    """
+    try:
+        image_data = base64.b64decode(request.base64_image)
+        array = np.frombuffer(image_data, dtype=np.uint8)
+        image = cv2.imdecode(array, -1)
+        if image is None:
+            return JSONResponse(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                content={"error": "Failed to decode the image."},
+            )
+            # raise HTTPException(status_code=400, detail="Failed to decode the image.")
+
+        crop_img = image[request.y: request.y + request.h, request.x: request.x + request.w]
+
+        ocr_df = pytesseract.image_to_data(crop_img, output_type=pytesseract.Output.DATAFRAME)
+        ocr_df = ocr_df.replace(r'^\s*$', np.nan, regex=True)
+        ocr_df = ocr_df.dropna().reset_index(drop=True)
+
+        return JSONResponse(
+            status_code=status.HTTP_200_OK,
+            content={"ocr_text": ' '.join(ocr_df['text'])},
+        )
+
+    except Exception as e:
+        return JSONResponse(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                content={"error": e},
+            )
+        # raise HTTPException(status_code=500, detail=f"An error occurred: {e}")
